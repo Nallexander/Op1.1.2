@@ -78,6 +78,7 @@ void child_command(enum cmd_pos pos, char* argv[], int left_pipe_read_fd, int ri
 
   // TODO: Register a the sigpipe_hanlder signal handler in order to detect if we 
   //       make any misstakes and receives a SIGPIPE.
+
   signal(SIGPIPE, sigpipe_handler);
   
   DBG("CHILD  <%ld> %s left_pipe_read_fd = %d, right_pipe_read_fd = %d, right_pipe_write_fd = %d\n", 
@@ -86,23 +87,24 @@ void child_command(enum cmd_pos pos, char* argv[], int left_pipe_read_fd, int ri
   // REMEMBER: The child inherits all open file descriptors from the parent. 
   
   // TODO: Close descritors if necessary. Redirect STDIN and STDOUT if necessary. 
-  close(right_pipe[0]);
+  
+  
 
   switch(pos){ 
   case first:
-    close(left_pipe_read_fd);
-    dup2(right_pipe[1], STDOUT);
+    dup2(right_pipe[1], STDOUT_FILENO);
+    close(right_pipe[0]);
     break;
   case middle:
-    dup2(right_pipe[1], STDOUT);
-    dup2(left_pipe_read_fd, STDIN);
+    dup2(right_pipe[1], STDOUT_FILENO);
+    dup2(left_pipe_read_fd, STDIN_FILENO);
+    close(right_pipe[0]);
     break;
   case last:
-    close(right_pipe[1]);
-    dup2(left_pipe_read_fd, STDIN);
+    dup2(left_pipe_read_fd, STDIN_FILENO);
+    break;
   default: // SINGLE
-    close(left_pipe_read_fd);
-    close(right_pipe[1]); 
+    break;
   }
   
   // Now we're ready to run the command. 
@@ -187,8 +189,16 @@ int pipe_and_fork(enum cmd_pos pos, char* argv[], int left_pipe_read_fd) {
   // TODO: The pipe must be created before the fork(), but only create
   //       a pipe if needed (use pos to make decision).
 
-  
-
+  switch(pos){
+  case first:
+    pipe(new_pipe);
+    break;
+  case middle:
+    pipe(new_pipe);
+    break;
+  default:
+    break;
+  }
   
   // Once the pipe is created we can fork a child process for the command. 
   
@@ -217,7 +227,7 @@ int pipe_and_fork(enum cmd_pos pos, char* argv[], int left_pipe_read_fd) {
     
     // TODO: Close descriptors if necessary. 
       
-    
+    close(new_pipe[1]);
     
     // Return the read descriptor of the newly created pipe. This
     // descriptor is needed by the next child. This is the left_pipe_read_fd 
@@ -349,6 +359,12 @@ int main() {
     // TODO: Make sure shell doesn't print a new prompt until 
     // all the command processes (children) have terminated.
     
+    int i;
+    int status;
+
+    for(i = 0; children > i; i++){
+      wait(&status);
+    }
     
   } // end while(1)
 } // end of main()
