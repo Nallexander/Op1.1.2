@@ -78,7 +78,7 @@ void child_command(enum cmd_pos pos, char* argv[], int left_pipe_read_fd, int ri
 
   // TODO: Register a the sigpipe_hanlder signal handler in order to detect if we 
   //       make any misstakes and receives a SIGPIPE.
-  
+  signal(SIGPIPE, sigpipe_handler);
   
   DBG("CHILD  <%ld> %s left_pipe_read_fd = %d, right_pipe_read_fd = %d, right_pipe_write_fd = %d\n", 
       (long) getpid(), argv[0], left_pipe_read_fd, right_pipe[0], right_pipe[1]);
@@ -86,9 +86,24 @@ void child_command(enum cmd_pos pos, char* argv[], int left_pipe_read_fd, int ri
   // REMEMBER: The child inherits all open file descriptors from the parent. 
   
   // TODO: Close descritors if necessary. Redirect STDIN and STDOUT if necessary. 
-  
+  close(right_pipe[0]);
 
-
+  switch(pos){ 
+  case first:
+    close(left_pipe_read_fd);
+    dup2(right_pipe[1], STDOUT);
+    break;
+  case middle:
+    dup2(right_pipe[1], STDOUT);
+    dup2(left_pipe_read_fd, STDIN);
+    break;
+  case last:
+    close(right_pipe[1]);
+    dup2(left_pipe_read_fd, STDIN);
+  default: // SINGLE
+    close(left_pipe_read_fd);
+    close(right_pipe[1]); 
+  }
   
   // Now we're ready to run the command. 
   run_command(argv);
